@@ -38,6 +38,7 @@ import com.netflix.conductor.common.metadata.events.EventHandler.Action;
 import com.netflix.conductor.core.config.ConductorProperties;
 import com.netflix.conductor.core.events.queue.Message;
 import com.netflix.conductor.core.events.queue.ObservableQueue;
+import com.netflix.conductor.core.exception.TransientException;
 import com.netflix.conductor.core.execution.evaluators.Evaluator;
 import com.netflix.conductor.core.utils.JsonUtils;
 import com.netflix.conductor.metrics.Monitors;
@@ -90,6 +91,7 @@ public class DefaultEventProcessor {
         this.objectMapper = objectMapper;
         this.jsonUtils = jsonUtils;
         this.evaluators = evaluators;
+        this.retryTemplate = retryTemplate;
 
         if (properties.getEventProcessorThreadCount() <= 0) {
             throw new IllegalStateException(
@@ -105,13 +107,12 @@ public class DefaultEventProcessor {
                         properties.getEventProcessorThreadCount(), threadFactory);
 
         this.isEventMessageIndexingEnabled = properties.isEventMessageIndexingEnabled();
-        this.retryTemplate = retryTemplate;
         LOGGER.info("Event Processing is ENABLED");
     }
 
     public void handle(ObservableQueue queue, Message msg) {
         List<EventExecution> transientFailures = null;
-        Boolean executionFailed = false;
+        boolean executionFailed = false;
         try {
             if (isEventMessageIndexingEnabled) {
                 executionService.addMessage(queue.getName(), msg);
@@ -124,15 +125,18 @@ public class DefaultEventProcessor {
             LOGGER.error("Error handling message: {} on queue:{}", msg, queue.getName(), e);
             Monitors.recordEventQueueMessagesError(queue.getType(), queue.getName());
         } finally {
-            if (executionFailed || CollectionUtils.isEmpty(transientFailures)) {
+            if (!executionFailed && CollectionUtils.isEmpty(transientFailures)) {
                 queue.ack(Collections.singletonList(msg));
                 LOGGER.debug("Message: {} acked on queue: {}", msg.getId(), queue.getName());
-            } else if (queue.rePublishIfNoAck()) {
+            } else if (queue.rePublishIfNoAck() || !CollectionUtils.isEmpty(transientFailures)) {
                 // re-submit this message to the queue, to be retried later
                 // This is needed for queues with no unack timeout, since messages are removed
                 // from the queue
                 queue.publish(Collections.singletonList(msg));
                 LOGGER.debug("Message: {} published to queue: {}", msg.getId(), queue.getName());
+            } else {
+                queue.nack(Collections.singletonList(msg));
+                LOGGER.debug("Message: {} nacked on queue: {}", msg.getId(), queue.getName());
             }
             Monitors.recordEventQueueMessagesHandled(queue.getType(), queue.getName());
         }
@@ -146,16 +150,23 @@ public class DefaultEventProcessor {
      * @return a list of {@link EventExecution} that failed due to transient failures.
      */
     protected List<EventExecution> executeEvent(String event, Message msg) throws Exception {
-        List<EventHandler> eventHandlerList = metadataService.getEventHandlersForEvent(event, true);
-        Object payloadObject = getPayloadObject(msg.getPayload());
-
+        List<EventHandler> eventHandlerList;
         List<EventExecution> transientFailures = new ArrayList<>();
+
+        try {
+            eventHandlerList = metadataService.getEventHandlersForEvent(event, true);
+        } catch (TransientException transientException) {
+            transientFailures.add(new EventExecution(event, msg.getId()));
+            return transientFailures;
+        }
+
+        Object payloadObject = getPayloadObject(msg.getPayload());
         for (EventHandler eventHandler : eventHandlerList) {
             String condition = eventHandler.getCondition();
             String evaluatorType = eventHandler.getEvaluatorType();
             // Set default to true so that if condition is not specified, it falls through
             // to process the event.
-            Boolean success = true;
+            boolean success = true;
             if (StringUtils.isNotEmpty(condition) && evaluators.get(evaluatorType) != null) {
                 Object result =
                         evaluators
@@ -267,6 +278,7 @@ public class DefaultEventProcessor {
                     eventExecution.getMessageId(),
                     payload);
 
+            // TODO: Switch to @Retryable annotation on SimpleActionProcessor.execute()
             Map<String, Object> output =
                     retryTemplate.execute(
                             context ->

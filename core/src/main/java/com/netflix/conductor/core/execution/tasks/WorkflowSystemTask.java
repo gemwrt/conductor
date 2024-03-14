@@ -65,6 +65,10 @@ public abstract class WorkflowSystemTask {
      */
     public void cancel(WorkflowModel workflow, TaskModel task, WorkflowExecutor workflowExecutor) {}
 
+    public Optional<Long> getEvaluationOffset(TaskModel taskModel, long defaultOffset) {
+        return Optional.empty();
+    }
+
     /**
      * @return True if the task is supposed to be started asynchronously using internal queues.
      */
@@ -93,6 +97,17 @@ public abstract class WorkflowSystemTask {
      */
     public String getTaskType() {
         return taskType;
+    }
+
+    /**
+     * Default to true for retrieving tasks when retrieving workflow data. Some cases (e.g.
+     * subworkflows) might not need the tasks at all, and by setting this to false in that case, you
+     * can get a solid performance gain.
+     *
+     * @return true for retrieving tasks when getting workflow
+     */
+    public boolean isTaskRetrievalRequired() {
+        return true;
     }
 
     @Override

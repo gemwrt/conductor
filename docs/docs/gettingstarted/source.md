@@ -5,7 +5,7 @@ In this article we will explore how you can set up Netflix Conductor on your loc
 features.
 
 ### Prerequisites
-1. JDK 11 or greater
+1. JDK 17 or greater
 2. (Optional) Docker if you want to run tests.  You can install docker from [here](https://www.docker.com/get-started/).
 3. Node for building and running UI.  Instructions at [https://nodejs.org](https://nodejs.org).
 4. Yarn for building and running UI.  Instructions at [https://classic.yarnpkg.com/en/docs/install](https://classic.yarnpkg.com/en/docs/install).
@@ -90,6 +90,6 @@ Launch UI [http://localhost:5000](http://localhost:5000)
 <img src="/img/tutorial/conductorUI.png" style="width: 100%" />
 
 ## Summary
-1. By default in-memory persistance is used, so any workflows created or excuted will be wiped out once the server is terminated.
+1. By default in-memory persistence is used, so any workflows created or excuted will be wiped out once the server is terminated.
 2. Without indexing configured, the search functionality in UI will not work and will result an empty set.
 3. See how to install Conductor using [Docker](docker.md) with persistence and indexing.

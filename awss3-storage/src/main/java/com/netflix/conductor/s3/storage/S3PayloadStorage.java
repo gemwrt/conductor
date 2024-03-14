@@ -22,14 +22,14 @@ import org.slf4j.LoggerFactory;
 
 import com.netflix.conductor.common.run.ExternalStorageLocation;
 import com.netflix.conductor.common.utils.ExternalPayloadStorage;
-import com.netflix.conductor.core.exception.ApplicationException;
+import com.netflix.conductor.core.exception.NonTransientException;
+import com.netflix.conductor.core.exception.TransientException;
 import com.netflix.conductor.core.utils.IDGenerator;
 import com.netflix.conductor.s3.config.S3Properties;
 
 import com.amazonaws.HttpMethod;
 import com.amazonaws.SdkClientException;
 import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.*;
 
 /**
@@ -51,12 +51,11 @@ public class S3PayloadStorage implements ExternalPayloadStorage {
     private final String bucketName;
     private final long expirationSec;
 
-    public S3PayloadStorage(IDGenerator idGenerator, S3Properties properties) {
+    public S3PayloadStorage(IDGenerator idGenerator, S3Properties properties, AmazonS3 s3Client) {
         this.idGenerator = idGenerator;
+        this.s3Client = s3Client;
         bucketName = properties.getBucketName();
         expirationSec = properties.getSignedUrlExpirationDuration().getSeconds();
-        String region = properties.getRegion();
-        s3Client = AmazonS3ClientBuilder.standard().withRegion(region).build();
     }
 
     /**
@@ -104,11 +103,11 @@ public class S3PayloadStorage implements ExternalPayloadStorage {
                             "Error communicating with S3 - operation:%s, payloadType: %s, path: %s",
                             operation, payloadType, path);
             LOGGER.error(msg, e);
-            throw new ApplicationException(ApplicationException.Code.BACKEND_ERROR, msg, e);
+            throw new TransientException(msg, e);
         } catch (URISyntaxException e) {
             String msg = "Invalid URI Syntax";
             LOGGER.error(msg, e);
-            throw new ApplicationException(ApplicationException.Code.INTERNAL_ERROR, msg, e);
+            throw new NonTransientException(msg, e);
         }
     }
 
@@ -135,7 +134,7 @@ public class S3PayloadStorage implements ExternalPayloadStorage {
                     String.format(
                             "Error uploading to S3 - path:%s, payloadSize: %d", path, payloadSize);
             LOGGER.error(msg, e);
-            throw new ApplicationException(ApplicationException.Code.BACKEND_ERROR, msg, e);
+            throw new TransientException(msg, e);
         }
     }
 
@@ -154,7 +153,7 @@ public class S3PayloadStorage implements ExternalPayloadStorage {
         } catch (SdkClientException e) {
             String msg = String.format("Error downloading from S3 - path:%s", path);
             LOGGER.error(msg, e);
-            throw new ApplicationException(ApplicationException.Code.BACKEND_ERROR, msg, e);
+            throw new TransientException(msg, e);
         }
     }
 

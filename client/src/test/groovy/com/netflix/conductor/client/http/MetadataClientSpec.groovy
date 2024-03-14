@@ -13,8 +13,9 @@
 package com.netflix.conductor.client.http
 
 import com.netflix.conductor.client.exception.ConductorClientException
-import com.netflix.conductor.client.exception.RequestHandlerException
+import com.netflix.conductor.common.metadata.workflow.WorkflowDef
 
+import com.sun.jersey.api.client.ClientResponse
 import spock.lang.Subject
 
 class MetadataClientSpec extends ClientSpecification {
@@ -37,31 +38,22 @@ class MetadataClientSpec extends ClientSpecification {
         metadataClient.unregisterWorkflowDef(workflowName, version)
 
         then:
-        1 * requestHandler.delete(uri)
+        1 * requestHandler.delete(uri, null)
     }
 
     def "workflow delete throws exception"() {
         given:
         String workflowName = 'test'
         int version = 1
-        InputStream errorResponse = toInputStream"""
-            {
-              "status": 404,
-              "message": "No such workflow definition: $workflowName version: $version",
-              "instance": "conductor-server",
-              "retryable": false
-            }
-        """
         URI uri = createURI("metadata/workflow/$workflowName/$version")
 
         when:
         metadataClient.unregisterWorkflowDef(workflowName, version)
 
         then:
-        1 * requestHandler.delete(uri) >> { throw new RequestHandlerException(errorResponse, 404) }
+        1 * requestHandler.delete(uri, null) >> { throw new RuntimeException(clientResponse) }
         def ex = thrown(ConductorClientException.class)
-        ex && ex.status == 404
-        ex.message == "No such workflow definition: $workflowName version: $version"
+        ex.message == "Unable to invoke Conductor API with uri: $uri, runtime exception occurred"
     }
 
     def "workflow delete version missing"() {
@@ -77,6 +69,26 @@ class MetadataClientSpec extends ClientSpecification {
         metadataClient.unregisterWorkflowDef(null, 1)
 
         then:
+        thrown(NullPointerException.class)
+
+        when:
+        metadataClient.unregisterWorkflowDef("   ", 1)
+
+        then:
         thrown(IllegalArgumentException.class)
+    }
+
+    def "workflow get all definitions latest version"() {
+        given:
+        List<WorkflowDef> result = new ArrayList<WorkflowDef>()
+        URI uri = createURI("metadata/workflow/latest-versions")
+
+        when:
+        metadataClient.getAllWorkflowsWithLatestVersions()
+
+        then:
+        1 * requestHandler.get(uri) >>  Mock(ClientResponse.class) {
+            getEntity(_) >> result
+        }
     }
 }

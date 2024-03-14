@@ -101,7 +101,7 @@ import static com.datastax.driver.core.querybuilder.QueryBuilder.set;
  *   <li>UPDATE conductor.workflows SET payload=? WHERE workflow_id=? AND shard_id=1 AND
  *       entity='workflow' AND task_id='';
  *   <li>UPDATE conductor.workflows SET total_tasks=? WHERE workflow_id=? AND shard_id=?;
- *   <li>UPDATE conductor.workflows SET * total_partitions=?,total_tasks=? WHERE workflow_id=? AND
+ *   <li>UPDATE conductor.workflows SET total_partitions=?,total_tasks=? WHERE workflow_id=? AND
  *       shard_id=1;
  *   <li>UPDATE conductor.task_lookup SET workflow_id=? WHERE task_id=?;
  *   <li>UPDATE conductor.task_def_limit SET workflow_id=? WHERE task_def_name=? AND task_id=?;
@@ -203,6 +203,14 @@ public class Statements {
      *     "workflow_defs_index" table
      */
     public String getSelectAllWorkflowDefsStatement() {
+        return QueryBuilder.select()
+                .all()
+                .from(keyspace, TABLE_WORKFLOW_DEFS_INDEX)
+                .where(eq(WORKFLOW_DEF_INDEX_KEY, bindMarker()))
+                .getQueryString();
+    }
+
+    public String getSelectAllWorkflowDefsLatestVersionsStatement() {
         return QueryBuilder.select()
                 .all()
                 .from(keyspace, TABLE_WORKFLOW_DEFS_INDEX)

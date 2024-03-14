@@ -139,6 +139,63 @@ class CassandraMetadataDAOSpec extends CassandraSpec {
         metadataDAO.getTaskDef(task2Name) == null
     }
 
+    def "set default response timeout when not set"() {
+        given:
+        String task1Name = "task1"
+
+        when: // register a task definition
+        TaskDef taskDef = new TaskDef()
+        taskDef.setName(task1Name)
+        taskDef.setResponseTimeoutSeconds(0)
+        metadataDAO.createTaskDef(taskDef)
+        def returnTaskDef = metadataDAO.getTaskDef(task1Name)
+
+        then:
+        returnTaskDef.getResponseTimeoutSeconds() == 3600
+
+        when: // register another task definition
+        taskDef.setTimeoutSeconds(200)
+        taskDef.setResponseTimeoutSeconds(0)
+        metadataDAO.updateTaskDef(taskDef)
+        // fetch all task defs
+        def taskDefList = metadataDAO.getAllTaskDefs()
+
+        then:
+        taskDefList && taskDefList.size() == 1
+        taskDefList.get(0).getResponseTimeoutSeconds() == 199
+
+    }
+
+    def "Get All WorkflowDef"() {
+        when:
+        metadataDAO.removeWorkflowDef("workflow_def_1", 1)
+        WorkflowDef workflowDef = new WorkflowDef()
+        workflowDef.setName("workflow_def_1")
+        workflowDef.setVersion(1)
+        workflowDef.setOwnerEmail("test@junit.com")
+        metadataDAO.createWorkflowDef(workflowDef)
+
+        workflowDef.setName("workflow_def_2")
+        metadataDAO.createWorkflowDef(workflowDef)
+        workflowDef.setVersion(2)
+        metadataDAO.createWorkflowDef(workflowDef)
+
+        workflowDef.setName("workflow_def_3")
+        workflowDef.setVersion(1)
+        metadataDAO.createWorkflowDef(workflowDef)
+        workflowDef.setVersion(2)
+        metadataDAO.createWorkflowDef(workflowDef)
+        workflowDef.setVersion(3)
+        metadataDAO.createWorkflowDef(workflowDef)
+
+        then: // fetch the workflow definition
+        def allDefsLatestVersions = metadataDAO.getAllWorkflowDefsLatestVersions()
+        Map<String, WorkflowDef> allDefsMap = allDefsLatestVersions.collectEntries {wfDef -> [wfDef.getName(), wfDef]}
+        allDefsMap.get("workflow_def_1").getVersion() == 1
+        allDefsMap.get("workflow_def_2").getVersion() == 2
+        allDefsMap.get("workflow_def_3").getVersion() == 3
+    }
+
     def "parse index string"() {
         expect:
         def pair = metadataDAO.getWorkflowNameAndVersion(nameVersionStr)

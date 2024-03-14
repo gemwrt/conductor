@@ -24,8 +24,9 @@ import org.springframework.stereotype.Component;
 
 import com.netflix.conductor.common.metadata.events.EventHandler;
 import com.netflix.conductor.core.config.ConductorProperties;
-import com.netflix.conductor.core.exception.ApplicationException;
-import com.netflix.conductor.core.exception.ApplicationException.Code;
+import com.netflix.conductor.core.exception.ConflictException;
+import com.netflix.conductor.core.exception.NotFoundException;
+import com.netflix.conductor.core.exception.TransientException;
 import com.netflix.conductor.dao.EventHandlerDAO;
 import com.netflix.conductor.redis.config.AnyRedisCondition;
 import com.netflix.conductor.redis.config.RedisProperties;
@@ -55,9 +56,8 @@ public class RedisEventHandlerDAO extends BaseDynoDAO implements EventHandlerDAO
     public void addEventHandler(EventHandler eventHandler) {
         Preconditions.checkNotNull(eventHandler.getName(), "Missing Name");
         if (getEventHandler(eventHandler.getName()) != null) {
-            throw new ApplicationException(
-                    Code.CONFLICT,
-                    "EventHandler with name " + eventHandler.getName() + " already exists!");
+            throw new ConflictException(
+                    "EventHandler with name %s already exists!", eventHandler.getName());
         }
         index(eventHandler);
         jedisProxy.hset(nsKey(EVENT_HANDLERS), eventHandler.getName(), toJson(eventHandler));
@@ -69,9 +69,11 @@ public class RedisEventHandlerDAO extends BaseDynoDAO implements EventHandlerDAO
         Preconditions.checkNotNull(eventHandler.getName(), "Missing Name");
         EventHandler existing = getEventHandler(eventHandler.getName());
         if (existing == null) {
-            throw new ApplicationException(
-                    Code.NOT_FOUND,
-                    "EventHandler with name " + eventHandler.getName() + " not found!");
+            throw new NotFoundException(
+                    "EventHandler with name %s not found!", eventHandler.getName());
+        }
+        if (!existing.getEvent().equals(eventHandler.getEvent())) {
+            removeIndex(existing);
         }
         index(eventHandler);
         jedisProxy.hset(nsKey(EVENT_HANDLERS), eventHandler.getName(), toJson(eventHandler));
@@ -82,8 +84,7 @@ public class RedisEventHandlerDAO extends BaseDynoDAO implements EventHandlerDAO
     public void removeEventHandler(String name) {
         EventHandler existing = getEventHandler(name);
         if (existing == null) {
-            throw new ApplicationException(
-                    Code.NOT_FOUND, "EventHandler with name " + name + " not found!");
+            throw new NotFoundException("EventHandler with name %s not found!", name);
         }
         jedisProxy.hdel(nsKey(EVENT_HANDLERS), name);
         recordRedisDaoRequests("removeEventHandler");
@@ -128,11 +129,9 @@ public class RedisEventHandlerDAO extends BaseDynoDAO implements EventHandlerDAO
                         && (!activeOnly || eventHandler.isActive())) {
                     handlers.add(eventHandler);
                 }
-            } catch (ApplicationException ae) {
-                if (ae.getCode() == Code.NOT_FOUND) {
-                    LOGGER.info("No matching event handler found for event: {}", event);
-                }
-                throw ae;
+            } catch (NotFoundException nfe) {
+                LOGGER.info("No matching event handler found for event: {}", event);
+                throw nfe;
             }
         }
         return handlers;
@@ -140,7 +139,12 @@ public class RedisEventHandlerDAO extends BaseDynoDAO implements EventHandlerDAO
 
     private EventHandler getEventHandler(String name) {
         EventHandler eventHandler = null;
-        String json = jedisProxy.hget(nsKey(EVENT_HANDLERS), name);
+        String json;
+        try {
+            json = jedisProxy.hget(nsKey(EVENT_HANDLERS), name);
+        } catch (Exception e) {
+            throw new TransientException("Unable to get event handler named " + name, e);
+        }
         if (json != null) {
             eventHandler = readValue(json, EventHandler.class);
         }

@@ -45,6 +45,9 @@ public class ConductorProperties {
     /** The number of threads to use to do background sweep on active workflows. */
     private int sweeperThreadCount = Runtime.getRuntime().availableProcessors() * 2;
 
+    /** The timeout (in milliseconds) for the polling of workflows to be swept. */
+    private Duration sweeperWorkflowPollTimeout = Duration.ofMillis(2000);
+
     /** The number of threads to configure the threadpool in the event processor. */
     private int eventProcessorThreadCount = 2;
 
@@ -108,9 +111,6 @@ public class ConductorProperties {
      * isolation group.
      */
     private int isolatedSystemTaskWorkerThreadCount = 1;
-
-    /** The max number of system tasks to be polled in a single request. */
-    private int systemTaskMaxPollCount = 1;
 
     /**
      * The duration of workflow execution which qualifies a workflow as a short-running workflow
@@ -210,6 +210,9 @@ public class ConductorProperties {
     @DataSizeUnit(DataUnit.KILOBYTES)
     private DataSize maxWorkflowVariablesPayloadSizeThreshold = DataSize.ofKilobytes(256L);
 
+    /** Used to limit the size of task execution logs. */
+    private int taskExecLogSizeLimit = 10;
+
     public String getStack() {
         return stack;
     }
@@ -248,6 +251,14 @@ public class ConductorProperties {
 
     public void setSweeperThreadCount(int sweeperThreadCount) {
         this.sweeperThreadCount = sweeperThreadCount;
+    }
+
+    public Duration getSweeperWorkflowPollTimeout() {
+        return sweeperWorkflowPollTimeout;
+    }
+
+    public void setSweeperWorkflowPollTimeout(Duration sweeperWorkflowPollTimeout) {
+        this.sweeperWorkflowPollTimeout = sweeperWorkflowPollTimeout;
     }
 
     public int getEventProcessorThreadCount() {
@@ -368,14 +379,6 @@ public class ConductorProperties {
 
     public void setIsolatedSystemTaskWorkerThreadCount(int isolatedSystemTaskWorkerThreadCount) {
         this.isolatedSystemTaskWorkerThreadCount = isolatedSystemTaskWorkerThreadCount;
-    }
-
-    public int getSystemTaskMaxPollCount() {
-        return systemTaskMaxPollCount;
-    }
-
-    public void setSystemTaskMaxPollCount(int systemTaskMaxPollCount) {
-        this.systemTaskMaxPollCount = systemTaskMaxPollCount;
     }
 
     public Duration getAsyncUpdateShortRunningWorkflowDuration() {
@@ -508,6 +511,14 @@ public class ConductorProperties {
     public void setMaxWorkflowVariablesPayloadSizeThreshold(
             DataSize maxWorkflowVariablesPayloadSizeThreshold) {
         this.maxWorkflowVariablesPayloadSizeThreshold = maxWorkflowVariablesPayloadSizeThreshold;
+    }
+
+    public int getTaskExecLogSizeLimit() {
+        return taskExecLogSizeLimit;
+    }
+
+    public void setTaskExecLogSizeLimit(int taskExecLogSizeLimit) {
+        this.taskExecLogSizeLimit = taskExecLogSizeLimit;
     }
 
     /**

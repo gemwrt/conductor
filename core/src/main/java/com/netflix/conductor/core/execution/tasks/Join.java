@@ -13,6 +13,7 @@
 package com.netflix.conductor.core.execution.tasks;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Component;
@@ -60,7 +61,10 @@ public class Join extends WorkflowSystemTask {
             if (hasFailures) {
                 failureReason.append(forkedTask.getReasonForIncompletion()).append(" ");
             }
-            task.addOutput(joinOnRef, forkedTask.getOutputData());
+            // Only add to task output if it's not empty
+            if (!forkedTask.getOutputData().isEmpty()) {
+                task.addOutput(joinOnRef, forkedTask.getOutputData());
+            }
             if (!taskStatus.isTerminal()) {
                 allDone = false;
             }
@@ -93,5 +97,18 @@ public class Join extends WorkflowSystemTask {
             return true;
         }
         return false;
+    }
+
+    @Override
+    public Optional<Long> getEvaluationOffset(TaskModel taskModel, long defaultOffset) {
+        int index = taskModel.getPollCount() > 0 ? taskModel.getPollCount() - 1 : 0;
+        if (index == 0) {
+            return Optional.of(0L);
+        }
+        return Optional.of(Math.min((long) Math.pow(2, index), defaultOffset));
+    }
+
+    public boolean isAsync() {
+        return true;
     }
 }

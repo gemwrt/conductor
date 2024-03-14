@@ -17,23 +17,70 @@ import java.util.List;
 import org.apache.commons.lang3.Validate;
 
 import com.netflix.conductor.client.config.ConductorClientConfiguration;
+import com.netflix.conductor.client.config.DefaultConductorClientConfiguration;
 import com.netflix.conductor.common.metadata.tasks.TaskDef;
 import com.netflix.conductor.common.metadata.workflow.WorkflowDef;
 
+import com.sun.jersey.api.client.ClientHandler;
+import com.sun.jersey.api.client.GenericType;
+import com.sun.jersey.api.client.config.ClientConfig;
+import com.sun.jersey.api.client.config.DefaultClientConfig;
+import com.sun.jersey.api.client.filter.ClientFilter;
+
 public class MetadataClient extends ClientBase {
+
+    private static final GenericType<List<WorkflowDef>> workflowDefList =
+            new GenericType<List<WorkflowDef>>() {};
 
     /** Creates a default metadata client */
     public MetadataClient() {
-        this(null);
+        this(new DefaultClientConfig(), new DefaultConductorClientConfiguration(), null);
     }
 
-    public MetadataClient(RequestHandler requestHandler) {
-        this(requestHandler, null);
+    /**
+     * @param clientConfig REST Client configuration
+     */
+    public MetadataClient(ClientConfig clientConfig) {
+        this(clientConfig, new DefaultConductorClientConfiguration(), null);
     }
 
+    /**
+     * @param clientConfig REST Client configuration
+     * @param clientHandler Jersey client handler. Useful when plugging in various http client
+     *     interaction modules (e.g. ribbon)
+     */
+    public MetadataClient(ClientConfig clientConfig, ClientHandler clientHandler) {
+        this(clientConfig, new DefaultConductorClientConfiguration(), clientHandler);
+    }
+
+    /**
+     * @param config config REST Client configuration
+     * @param handler handler Jersey client handler. Useful when plugging in various http client
+     *     interaction modules (e.g. ribbon)
+     * @param filters Chain of client side filters to be applied per request
+     */
+    public MetadataClient(ClientConfig config, ClientHandler handler, ClientFilter... filters) {
+        this(config, new DefaultConductorClientConfiguration(), handler, filters);
+    }
+
+    /**
+     * @param config REST Client configuration
+     * @param clientConfiguration Specific properties configured for the client, see {@link
+     *     ConductorClientConfiguration}
+     * @param handler Jersey client handler. Useful when plugging in various http client interaction
+     *     modules (e.g. ribbon)
+     * @param filters Chain of client side filters to be applied per request
+     */
     public MetadataClient(
-            RequestHandler requestHandler, ConductorClientConfiguration clientConfiguration) {
-        super(requestHandler, clientConfiguration);
+            ClientConfig config,
+            ConductorClientConfiguration clientConfiguration,
+            ClientHandler handler,
+            ClientFilter... filters) {
+        super(new ClientRequestHandler(config, handler, filters), clientConfiguration);
+    }
+
+    MetadataClient(ClientRequestHandler requestHandler) {
+        super(requestHandler, null);
     }
 
     // Workflow Metadata Operations
@@ -44,8 +91,13 @@ public class MetadataClient extends ClientBase {
      * @param workflowDef the workflow definition
      */
     public void registerWorkflowDef(WorkflowDef workflowDef) {
-        Validate.notNull(workflowDef, "Worfklow definition cannot be null");
-        post("metadata/workflow", workflowDef);
+        Validate.notNull(workflowDef, "Workflow definition cannot be null");
+        postForEntityWithRequestOnly("metadata/workflow", workflowDef);
+    }
+
+    public void validateWorkflowDef(WorkflowDef workflowDef) {
+        Validate.notNull(workflowDef, "Workflow definition cannot be null");
+        postForEntityWithRequestOnly("metadata/workflow/validate", workflowDef);
     }
 
     /**
@@ -54,7 +106,7 @@ public class MetadataClient extends ClientBase {
      * @param workflowDefs List of workflow definitions to be updated
      */
     public void updateWorkflowDefs(List<WorkflowDef> workflowDefs) {
-        Validate.notNull(workflowDefs, "Worfklow defs list cannot be null");
+        Validate.notNull(workflowDefs, "Workflow defs list cannot be null");
         put("metadata/workflow", null, workflowDefs);
     }
 
@@ -72,6 +124,12 @@ public class MetadataClient extends ClientBase {
                 new Object[] {"version", version},
                 WorkflowDef.class,
                 name);
+    }
+
+    /** */
+    public List<WorkflowDef> getAllWorkflowsWithLatestVersions() {
+        return getForEntity(
+                "metadata/workflow/latest-versions", null, workflowDefList, (Object) null);
     }
 
     /**
@@ -96,7 +154,7 @@ public class MetadataClient extends ClientBase {
      */
     public void registerTaskDefs(List<TaskDef> taskDefs) {
         Validate.notNull(taskDefs, "Task defs list cannot be null");
-        post("metadata/taskdefs", taskDefs);
+        postForEntityWithRequestOnly("metadata/taskdefs", taskDefs);
     }
 
     /**

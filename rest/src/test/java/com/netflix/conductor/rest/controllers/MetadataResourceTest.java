@@ -51,6 +51,13 @@ public class MetadataResourceTest {
     }
 
     @Test
+    public void testValidateWorkflow() {
+        WorkflowDef workflowDef = new WorkflowDef();
+        metadataResource.validate(workflowDef);
+        verify(mockMetadataService, times(1)).validateWorkflowDef(any(WorkflowDef.class));
+    }
+
+    @Test
     public void testUpdateWorkflow() {
         WorkflowDef workflowDef = new WorkflowDef();
         List<WorkflowDef> listOfWorkflowDef = new ArrayList<>();
@@ -82,6 +89,20 @@ public class MetadataResourceTest {
 
         when(mockMetadataService.getWorkflowDefs()).thenReturn(listOfWorkflowDef);
         assertEquals(listOfWorkflowDef, metadataResource.getAll());
+    }
+
+    @Test
+    public void testGetAllWorkflowDefLatestVersions() {
+        WorkflowDef workflowDef = new WorkflowDef();
+        workflowDef.setName("test");
+        workflowDef.setVersion(1);
+        workflowDef.setDescription("test");
+
+        List<WorkflowDef> listOfWorkflowDef = new ArrayList<>();
+        listOfWorkflowDef.add(workflowDef);
+
+        when(mockMetadataService.getWorkflowDefsLatestVersions()).thenReturn(listOfWorkflowDef);
+        assertEquals(listOfWorkflowDef, metadataResource.getAllWorkflowsWithLatestVersions());
     }
 
     @Test
